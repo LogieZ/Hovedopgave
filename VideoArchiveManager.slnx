@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/VideoArchiveManager/VideoArchiveManager.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VideoArchiveManager.Tests/VideoArchiveManager.Tests.csproj" />
+  </Folder>
+</Solution>

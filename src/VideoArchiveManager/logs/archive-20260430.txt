@@ -1,0 +1,18 @@
+2026-04-30 12:17:48.830 +02:00 [INF] === Video Archive Manager Starter ===
+2026-04-30 12:17:49.761 +02:00 [INF] Begynder scanning af arkiv: C:\Users\mttho\Videos
+2026-04-30 12:17:49.772 +02:00 [DBG] No YouTube ID found in file name: 2024-01-20 17-15-44.mkv
+2026-04-30 12:17:49.772 +02:00 [DBG] No YouTube ID found in file name: 2024-01-20 17-30-47.mkv
+2026-04-30 12:17:49.773 +02:00 [DBG] No YouTube ID found in file name: 2026-02-10 11-09-06.mkv
+2026-04-30 12:17:49.911 +02:00 [DBG] File C:\Users\mttho\Videos\Min Test Video [dQw4w9WgXcQ].mp4 has YouTube ID dQw4w9WgXcQ but no DB entry
+2026-04-30 12:17:49.913 +02:00 [INF] === Scanning Færdig ===
+2026-04-30 12:17:49.913 +02:00 [INF] Resultat: NewlyLinked=0, AlreadyLinked=0, Unmatched=3, Untracked=1
+2026-04-30 12:17:49.914 +02:00 [INF] Rydder op og lukker...
+2026-04-30 12:23:08.833 +02:00 [INF] === Video Archive Manager Starter ===
+2026-04-30 12:23:09.351 +02:00 [INF] Begynder scanning af arkiv: C:\Users\mttho\Videos
+2026-04-30 12:23:09.360 +02:00 [DBG] No YouTube ID found in file name: 2024-01-20 17-15-44.mkv
+2026-04-30 12:23:09.361 +02:00 [DBG] No YouTube ID found in file name: 2024-01-20 17-30-47.mkv
+2026-04-30 12:23:09.362 +02:00 [DBG] No YouTube ID found in file name: 2026-02-10 11-09-06.mkv
+2026-04-30 12:23:09.620 +02:00 [INF] Linked dQw4w9WgXcQ -> C:\Users\mttho\Videos\Min Test Video [dQw4w9WgXcQ].mp4
+2026-04-30 12:23:09.621 +02:00 [INF] === Scanning Færdig ===
+2026-04-30 12:23:09.622 +02:00 [INF] Resultat: NewlyLinked=1, AlreadyLinked=0, Unmatched=3, Untracked=0
+2026-04-30 12:23:09.622 +02:00 [INF] Rydder op og lukker...
