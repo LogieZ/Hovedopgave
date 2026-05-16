@@ -7,8 +7,6 @@ namespace VideoArchiveManager.Models
         public string YoutubeId { get; set; } = string.Empty;
 
         public string Title { get; set; } = string.Empty;
-        // The name of the channel that uploaded the video
-        public string? ChannelName { get; set; }
         // The duration of the video in seconds
         public long DurationSeconds { get; set; }
 

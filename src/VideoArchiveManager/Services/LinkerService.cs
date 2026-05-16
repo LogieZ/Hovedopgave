@@ -1,15 +1,16 @@
 using Serilog;
 using VideoArchiveManager.Models;
 using VideoArchiveManager.Configuration;
+using VideoArchiveManager.Interfaces;
 
 namespace VideoArchiveManager.Services;
 
 public sealed class LinkerService
 {
-    private readonly DatabaseService _db;
+    private readonly IDatabaseService _db;
     private readonly AppSettings _settings;
 
-    public LinkerService(DatabaseService db, AppSettings settings)
+    public LinkerService(IDatabaseService db, AppSettings settings)
     {
         _db = db;
         _settings = settings;
@@ -36,19 +37,15 @@ public sealed class LinkerService
         {
             await ProcessBatchAsync(batch, report, cancellationToken).ConfigureAwait(false);
         }
-        return report;
-    }
 
-    public async Task<int> VerifyLinksAsync()
-    {
-        int missing = 0;
-        foreach (var entry in _db.StreamLinkedButMissingOnDisk())
+        // After processing all files, we can also check for any untracked files in the database that might need attention.
+        if (report.UnmatchedFileNames.Any())
         {
-            await _db.UpdateLink(entry.YoutubeId, null, null, LinkStatus.Missing);
-            Log.Warning("File missing for entry {YoutubeId}: {Path}", entry.YoutubeId, entry.LinkedFilePath);
-            missing++;
+            await File.WriteAllLinesAsync("unmatched_files.txt", report.UnmatchedFileNames, cancellationToken);
+            Log.Information("A list of {Count} unmatched files has been saved to 'unmatched_files.txt'", report.UnmatchedFileNames.Count);
         }
-        return missing;
+
+        return report;
     }
 
     private async Task ProcessBatchAsync(
@@ -59,32 +56,35 @@ public sealed class LinkerService
         foreach (var file in batch)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            VideoEntry? entry = null;
 
-            if (file.YoutubeId != null)
+            if (!string.IsNullOrEmpty(file.YoutubeId))
             {
-                var entry = _db.FindByYoutubeId(file.YoutubeId);
-                if (entry != null)
-                {
-                    if (entry.Status == LinkStatus.Linked && entry.LinkedFilePath == file.FilePath)
-                    {
-                        report.AlreadyLinked++;
-                        continue;
-                    }
-
-                    await _db.UpdateLink(file.YoutubeId, file.FilePath, file.SizeBytes, LinkStatus.Linked);
-                    Log.Information("Linked {YoutubeId} -> {FilePath}", file.YoutubeId, file.FilePath);
-                    report.NewlyLinked++;
-                }
-                else
-                {
-                    Log.Debug("File {FilePath} has YouTube ID {id} but no DB entry", file.FilePath, file.YoutubeId);
-                    report.UntrackedFiles++;
-                }
+                entry = _db.FindByYoutubeId(file.YoutubeId);
             }
-            else
+
+            if (entry == null)
             {
-                Log.Debug("No YouTube ID found in file name: {FileName}", file.FileName);
-                report.UnmatchedFiles++;
+                entry = _db.FindBestMatchByTitle(file.FileName);
+            }
+
+            if (entry != null)
+            {
+                if (entry.Status == LinkStatus.Linked && entry.LinkedFilePath == file.FilePath)
+                {
+                    report.AlreadyLinked++;
+                    continue;
+                }
+
+                await _db.UpdateLink(entry.YoutubeId, file.FilePath, file.SizeBytes, LinkStatus.Linked);
+                Log.Information("Match found: [DB: {DBTitle}] <-> [File: {FileName}]", entry.Title, file.FileName);
+                report.NewlyLinked++;
+            }
+            else 
+            {
+                Log.Debug("Could not match file: {FileName}", file.FileName);
+                // Add the filename to the list in the report for unmatched files, so we can review it later.
+                report.UnmatchedFileNames.Add(file.FileName);
             }
         }
     }
@@ -94,10 +94,11 @@ public sealed class LinkReport
 {
     public int NewlyLinked { get; set; }
     public int AlreadyLinked { get; set; }
-    public int UnmatchedFiles { get; set; }
+    // We store the actual filenames in a list instead of just a count, so we can review them later and see if there are any patterns in the unmatched files (e.g., certain naming conventions that are not being parsed correctly).
+    public List<string> UnmatchedFileNames { get; } = new(); 
     public int UntrackedFiles { get; set; }
 
     public override string ToString() =>
         $"NewlyLinked={NewlyLinked}, AlreadyLinked={AlreadyLinked}, " +
-        $"Unmatched={UnmatchedFiles}, Untracked={UntrackedFiles}";
+        $"Unmatched={UnmatchedFileNames.Count}, Untracked={UntrackedFiles}";
 }

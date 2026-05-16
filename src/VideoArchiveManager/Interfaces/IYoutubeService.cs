@@ -1,0 +1,9 @@
+using VideoArchiveManager.Models;
+
+namespace VideoArchiveManager.Interfaces;
+
+public interface IYoutubeService
+{
+    Task ImportChannelVideosAsync(string channelUrl);
+    Task<bool> DownloadVideoAsync(VideoEntry entry, string destinationFolder);
+}

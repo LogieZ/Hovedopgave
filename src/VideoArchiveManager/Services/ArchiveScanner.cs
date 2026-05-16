@@ -1,22 +1,27 @@
 using System.Text.RegularExpressions;
 using Serilog;
-using VideoArchiveManager.Models;
+using VideoArchiveManager.Interfaces;
 using VideoArchiveManager.Configuration;
+using VideoArchiveManager.Models;
 
 namespace VideoArchiveManager.Services;
 
 public sealed class ArchiveScanner
 {
+    // Matches YouTube IDs in the format [VIDEO_ID] at the end of the filename, optionally followed by an extension.
     private static readonly Regex YoutubeIdPattern =
         new(@"\[(?<id>[A-Za-z0-9_-]{11})\](?:\.[^.]+)?$", RegexOptions.Compiled);
 
     private readonly AppSettings _settings;
+    private readonly IFileSystem _fileSystem;
 
-    public ArchiveScanner(AppSettings settings)
+    public ArchiveScanner(AppSettings settings, IFileSystem fileSystem)
     {
         _settings = settings;
+        _fileSystem = fileSystem;
     }
 
+    // Scans the archive directory and yields FileRecord objects for each video file found.
     public IEnumerable<FileRecord> Scan(CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(_settings.ArchiveRootPath))
@@ -27,19 +32,16 @@ public sealed class ArchiveScanner
 
         var enumerationOptions = new EnumerationOptions
         {
-            IgnoreInaccessible = true,
-            RecurseSubdirectories = true,
-            AttributesToSkip = FileAttributes.System,
+            IgnoreInaccessible = true, // Skip files/directories we can't access
+            RecurseSubdirectories = true, // Search all subdirectories
+            AttributesToSkip = FileAttributes.System, // Skip system files
             BufferSize = 65536, // 64 KB
         };
 
         IEnumerable<string> files;
         try 
         {
-            files = Directory.EnumerateFiles(
-                _settings.ArchiveRootPath,
-                "*",
-                enumerationOptions);
+            files = _fileSystem.EnumerateFiles(_settings.ArchiveRootPath);
         }
         catch (Exception ex)
         {
@@ -47,6 +49,7 @@ public sealed class ArchiveScanner
             yield break;
         }
 
+        // Process each file found in the archive
         foreach (var filePath in files)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -57,19 +60,20 @@ public sealed class ArchiveScanner
                 continue;
             }
 
+            // Attempt to create a FileRecord for the video file, including extracting YouTube ID if present.
             FileRecord record;
             try
             {
-                var info = new FileInfo(filePath);
+                var fileSize = _fileSystem.GetFileSize(filePath);
                 record = new FileRecord
                 {
                     FilePath = filePath,
-                    FileName = info.Name,
+                    FileName = Path.GetFileName(filePath),
                     Extension = ext.ToLowerInvariant(),
-                    SizeBytes = info.Length,
-                    LastWriteTimeUtc = info.LastWriteTimeUtc,
-                    CreationTimeUtc = info.CreationTimeUtc,
-                    YoutubeId = ExtractYoutubeId(info.Name)
+                    SizeBytes = fileSize,
+                    LastWriteTimeUtc = DateTime.UtcNow,
+                    CreationTimeUtc = DateTime.UtcNow,
+                    YoutubeId = ExtractYoutubeId(Path.GetFileName(filePath))
                 };
             }
             catch (Exception ex)
@@ -82,6 +86,7 @@ public sealed class ArchiveScanner
         }
     }
 
+    // Extracts a YouTube video ID from the filename if it matches the expected pattern.
     public static string? ExtractYoutubeId(string fileName)
     {
         var match = YoutubeIdPattern.Match(fileName);
