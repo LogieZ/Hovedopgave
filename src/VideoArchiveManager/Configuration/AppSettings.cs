@@ -22,4 +22,6 @@ public sealed class AppSettings
     public bool DownloadMissing { get; set; } = false;
 
     public string LogPath { get; set; } = "logs/archive-.log";
+
+    public string ChannelUrl { get; set; } = "https://www.youtube.com/@DanmarkCTV/videos";
 }

@@ -56,7 +56,7 @@ try
         Log.Warning("Stop signal received. Exiting gracefully...");
     };
 
-    await youtubeService.ImportChannelVideosAsync("https://www.youtube.com/@DanmarkCTV/videos");
+    await youtubeService.ImportChannelVideosAsync(settings.ChannelUrl);
 
     Log.Information("Starting scan and match of archive: {Path}", settings.ArchiveRootPath);
 
