@@ -8,10 +8,6 @@ namespace VideoArchiveManager.Services;
 
 public sealed class ArchiveScanner
 {
-    // Matches YouTube IDs in the format [VIDEO_ID] at the end of the filename, optionally followed by an extension.
-    private static readonly Regex YoutubeIdPattern =
-        new(@"\[(?<id>[A-Za-z0-9_-]{11})\](?:\.[^.]+)?$", RegexOptions.Compiled);
-
     private readonly AppSettings _settings;
     private readonly IFileSystem _fileSystem;
 
@@ -73,7 +69,7 @@ public sealed class ArchiveScanner
                     SizeBytes = fileSize,
                     LastWriteTimeUtc = DateTime.UtcNow,
                     CreationTimeUtc = DateTime.UtcNow,
-                    YoutubeId = ExtractYoutubeId(Path.GetFileName(filePath))
+                    YoutubeId = null // Set to null by default, since local files won't have this info.
                 };
             }
             catch (Exception ex)
@@ -84,12 +80,5 @@ public sealed class ArchiveScanner
 
             yield return record;
         }
-    }
-
-    // Extracts a YouTube video ID from the filename if it matches the expected pattern.
-    public static string? ExtractYoutubeId(string fileName)
-    {
-        var match = YoutubeIdPattern.Match(fileName);
-        return match.Success ? match.Groups["id"].Value : null;
     }
 }

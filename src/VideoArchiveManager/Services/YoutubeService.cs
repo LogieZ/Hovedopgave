@@ -24,7 +24,7 @@ public sealed class YoutubeService : IYoutubeService
         var startInfo = new ProcessStartInfo
         {
             FileName = "yt-dlp",
-            Arguments = $"--flat-playlist --dump-json --print \"upload_date:%(upload_date)s\" {channelUrl}",
+            Arguments = $"--flat-playlist --dump-json --cookies cookies.txt --print \"upload_date:%(upload_date)s\" {channelUrl}",
             RedirectStandardOutput = true,
             UseShellExecute = false,
             CreateNoWindow = true,
@@ -106,7 +106,7 @@ public sealed class YoutubeService : IYoutubeService
                 // --merge-output-format mp4: Ensures output is in MP4 format
                 // --restrict-filenames: Removes special characters from filename
                 // -o: Specifies destination folder and filename format
-                Arguments = $"-f \"bestvideo+bestaudio/best\" --merge-output-format mp4 " +
+                Arguments = $"--cookies cookies.txt -f \"bestvideo+bestaudio/best\" --merge-output-format mp4 " +
                             $"--restrict-filenames " +
                             $"-o \"{destinationFolder}/%(title)s.%(ext)s\" " +
                             $"--no-playlist \"https://www.youtube.com/watch?v={entry.YoutubeId}\"",

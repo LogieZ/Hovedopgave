@@ -67,7 +67,7 @@ try
     var unlinkedVideos = await dbService.GetAllUnlinkedEntriesAsync();
 
     var missingVideos = unlinkedVideos
-        .Take(5) // We take 5 at a time to be safe
+        .Take(1) // We take 5 at a time to be safe
         .ToList();
 
     if (missingVideos.Any())
@@ -78,13 +78,51 @@ try
         {
             if (cts.Token.IsCancellationRequested) break;
 
-            // Save them in ArchiveRootPath
-            bool success = await youtubeService.DownloadVideoAsync(video, settings.ArchiveRootPath);
+            int maxRetries = 3;
+            bool downloadSuccess = false;
 
-            if (success)
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                Log.Information("Waiting 20 seconds before the next download..."); // To avoid YouTube becoming suspicious
-                await Task.Delay(20000, cts.Token);
+                if (cts.Token.IsCancellationRequested) break;
+
+                try
+                {
+                    if (attempt > 1)
+                    {
+                        Log.Warning("Retry attempt {Attempt} of {MaxRetries} for video {Title}", attempt, maxRetries, video.Title);
+                    }
+
+                    downloadSuccess = await youtubeService.DownloadVideoAsync(video, settings.ArchiveRootPath);
+
+                    if (downloadSuccess)
+                    {
+                        Log.Information("Successfully downloaded video: {Title}", video.Title);
+
+                        Log.Information("Waiting 20 seconds before the next download..."); // To avoid YouTube becoming suspicious
+                        await Task.Delay(20000, cts.Token);
+
+                        break;
+                    }
+                    else
+                    {
+                        throw new Exception("Download returned false (yt-dlp failed)");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Attempt {Attempt} failed for video {Title}. Error: {Message}", attempt, video.Title, ex.Message);
+
+                    if (attempt == maxRetries)
+                    {
+                        Log.Fatal("All {MaxRetries} attempts failed. Skipping video: {Title}", maxRetries, video.Title);
+                    }
+                    else
+                    {
+                        int backoffDelay = attempt * 10000; // Exponential backoff: 10s, 20s, 30s
+                        Log.Warning("Network or API issue. Waiting {Seconds} seconds before retrying...", backoffDelay / 1000);
+                        await Task.Delay(backoffDelay, cts.Token);
+                    }
+                }
             }
         }
     }
