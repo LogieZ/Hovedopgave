@@ -5,5 +5,8 @@ namespace VideoArchiveManager.Interfaces;
 public interface IYoutubeService
 {
     Task ImportChannelVideosAsync(string channelUrl);
-    Task<bool> DownloadVideoAsync(VideoEntry entry, string destinationFolder);
+    Task<bool> DownloadVideoAsync(
+        VideoEntry entry,
+        string destinationFolder,
+        CancellationToken cancellationToken = default);
 }

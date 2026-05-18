@@ -4,7 +4,7 @@ public sealed class AppSettings
 {
     public string ArchiveRootPath { get; set; } = string.Empty;
 
-    public string ConnectionString { get; set; } = "Host=localhost;Database=video_archive;Username=postgres;Password=1234";
+    public string ConnectionString { get; set; } = string.Empty;
 
     public string YtDlpPath { get; set; } = "yt-dlp";
 

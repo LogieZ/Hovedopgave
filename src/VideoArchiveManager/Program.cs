@@ -5,6 +5,8 @@ using VideoArchiveManager.Interfaces;
 using VideoArchiveManager.Configuration;
 using VideoArchiveManager.Services;
 using VideoArchiveManager.Models;
+using Microsoft.Extensions.Configuration;
+using System.Diagnostics;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Debug()
@@ -14,13 +16,19 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
+    Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal;
     Log.Information("=== Video Archive Manager Starter ===");
 
+    var config = new ConfigurationBuilder()
+        .AddJsonFile("appsettings.json", optional: false)
+        .Build();
+    
     var settings = new AppSettings
     {
-        ArchiveRootPath = @"F:\DKCTV Filer",
-        ConnectionString = "Host=localhost;Database=video_archive;Username=postgres;Password=1234",
-        BatchSize = 100
+        ArchiveRootPath = config["ArchiveRootPath"]!,
+        ConnectionString = config["ConnectionString"]!,
+        ChannelUrl = config["ChannelUrl"]!,
+        BatchSize = int.Parse(config["BatchSize"] ?? "100")
     };
 
     var serviceCollection = new ServiceCollection();
@@ -46,6 +54,7 @@ try
 
     var dbService = serviceProvider.GetRequiredService<IDatabaseService>();
     var youtubeService = serviceProvider.GetRequiredService<IYoutubeService>();
+    var fileSystem = serviceProvider.GetRequiredService<IFileSystem>();
     var scanner = serviceProvider.GetRequiredService<ArchiveScanner>();
     var linker = serviceProvider.GetRequiredService<LinkerService>();
     
@@ -62,17 +71,39 @@ try
 
     var report = await linker.LinkAsync(scanner, cts.Token);
 
+    Log.Information("Checking linked entries for files missing on disk...");
+
+    var linkedEntries = dbService.StreamLinkedButMissingOnDisk();
+    int brokenLinks = 0;
+
+    foreach (var entry in linkedEntries)
+    {
+        if (cts.Token.IsCancellationRequested) break;
+        if (string.IsNullOrWhiteSpace(entry.LinkedFilePath)) continue;
+
+        if (!fileSystem.FileExists(entry.LinkedFilePath))
+        {
+            await dbService.UpdateLink(entry.YoutubeId, null, null, LinkStatus.Missing);
+            brokenLinks++;
+        }
+    }
+
+    if (brokenLinks > 0)
+    {
+        Log.Warning("Marked {Count} linked entries as Missing because files were not found on disk.", brokenLinks);
+    }
+
     Log.Information("Checking if any missing videos need to be downloaded...");
 
-    var unlinkedVideos = await dbService.GetAllUnlinkedEntriesAsync();
-
-    var missingVideos = unlinkedVideos
-        .Take(1) // We take 5 at a time to be safe
-        .ToList();
+    var totalMissingCount = await dbService.CountDownloadCandidatesAsync();
+    var missingVideos = await dbService.GetDownloadCandidatesAsync(5);
 
     if (missingVideos.Any())
     {
-        Log.Information("There are {Count} videos missing locally. Starting download of the first 5...", unlinkedVideos.Count);
+        Log.Information(
+            "There are {TotalMissing} videos missing locally. Starting download of {BatchCount} video(s) this run (max 5).",
+            totalMissingCount,
+            missingVideos.Count);
 
         foreach (var video in missingVideos)
         {
@@ -92,7 +123,7 @@ try
                         Log.Warning("Retry attempt {Attempt} of {MaxRetries} for video {Title}", attempt, maxRetries, video.Title);
                     }
 
-                    downloadSuccess = await youtubeService.DownloadVideoAsync(video, settings.ArchiveRootPath);
+                    downloadSuccess = await youtubeService.DownloadVideoAsync(video, settings.ArchiveRootPath, cts.Token);
 
                     if (downloadSuccess)
                     {
@@ -115,10 +146,11 @@ try
                     if (attempt == maxRetries)
                     {
                         Log.Fatal("All {MaxRetries} attempts failed. Skipping video: {Title}", maxRetries, video.Title);
+                        await dbService.UpdateLink(video.YoutubeId, null, null, LinkStatus.DownloadFailed);
                     }
                     else
                     {
-                        int backoffDelay = attempt * 10000; // Exponential backoff: 10s, 20s, 30s
+                        int backoffDelay = (int)(Math.Pow(2, attempt -1) * 10000); // Exponential backoff: 10s, 20s, 40s
                         Log.Warning("Network or API issue. Waiting {Seconds} seconds before retrying...", backoffDelay / 1000);
                         await Task.Delay(backoffDelay, cts.Token);
                     }

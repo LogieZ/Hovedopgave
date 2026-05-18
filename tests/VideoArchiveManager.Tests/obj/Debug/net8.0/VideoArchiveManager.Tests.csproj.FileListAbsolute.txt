@@ -142,3 +142,10 @@ C:\Users\mttho\Documents\GitHub\Hovedopgave\tests\VideoArchiveManager.Tests\obj\
 C:\Users\mttho\Documents\GitHub\Hovedopgave\tests\VideoArchiveManager.Tests\obj\Debug\net8.0\VideoArchiveManager.Tests.pdb
 C:\Users\mttho\Documents\GitHub\Hovedopgave\tests\VideoArchiveManager.Tests\obj\Debug\net8.0\VideoArchiveManager.Tests.genruntimeconfig.cache
 C:\Users\mttho\Documents\GitHub\Hovedopgave\tests\VideoArchiveManager.Tests\obj\Debug\net8.0\ref\VideoArchiveManager.Tests.dll
+C:\Users\mttho\Documents\GitHub\Hovedopgave\tests\VideoArchiveManager.Tests\bin\Debug\net8.0\appsettings.json
+C:\Users\mttho\Documents\GitHub\Hovedopgave\tests\VideoArchiveManager.Tests\bin\Debug\net8.0\Microsoft.Extensions.Configuration.dll
+C:\Users\mttho\Documents\GitHub\Hovedopgave\tests\VideoArchiveManager.Tests\bin\Debug\net8.0\Microsoft.Extensions.Configuration.FileExtensions.dll
+C:\Users\mttho\Documents\GitHub\Hovedopgave\tests\VideoArchiveManager.Tests\bin\Debug\net8.0\Microsoft.Extensions.Configuration.Json.dll
+C:\Users\mttho\Documents\GitHub\Hovedopgave\tests\VideoArchiveManager.Tests\bin\Debug\net8.0\Microsoft.Extensions.FileProviders.Abstractions.dll
+C:\Users\mttho\Documents\GitHub\Hovedopgave\tests\VideoArchiveManager.Tests\bin\Debug\net8.0\Microsoft.Extensions.FileProviders.Physical.dll
+C:\Users\mttho\Documents\GitHub\Hovedopgave\tests\VideoArchiveManager.Tests\bin\Debug\net8.0\Microsoft.Extensions.FileSystemGlobbing.dll

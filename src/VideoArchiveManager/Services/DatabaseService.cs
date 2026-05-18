@@ -11,6 +11,7 @@ namespace VideoArchiveManager.Services;
 public sealed class DatabaseService : IDatabaseService
 {
     private readonly AppSettings _settings;
+    private List<(string YoutubeId, string Title)>? _candidateCache;
 
     public DatabaseService(AppSettings settings)
     {
@@ -40,17 +41,23 @@ public sealed class DatabaseService : IDatabaseService
         var cleanTitleFragment = Regex.Replace(fileNameOnly, @"^[0-9-]+", "").Trim();
         
         // Fetch all candidates (we do this once per batch for efficiency)
-        var candidates = context.VideoEntries
-            .AsNoTracking()
-            .Select(e => new { e.YoutubeId, e.Title })
-            .ToList();
+        if (_candidateCache == null)
+        {
+            using var cacheContext = CreateContext();
+            _candidateCache = cacheContext.VideoEntries
+                .AsNoTracking()
+                .Select(e => new ValueTuple<string, string>(e.YoutubeId, e.Title))
+                .ToList();
+        }
+
+        var candidates = _candidateCache;
 
         // 1. Simple substring match - check if the cleaned title fragment is contained in any video title or vice versa (case-insensitive)
         var simpleMatch = candidates.FirstOrDefault(v => 
             v.Title.Contains(cleanTitleFragment, StringComparison.OrdinalIgnoreCase) || 
             cleanTitleFragment.Contains(v.Title, StringComparison.OrdinalIgnoreCase));
 
-        if (simpleMatch != null)
+        if (!string.IsNullOrWhiteSpace(simpleMatch.YoutubeId))
         {
             return context.VideoEntries.FirstOrDefault(v => v.YoutubeId == simpleMatch.YoutubeId);
         }
@@ -94,6 +101,7 @@ public sealed class DatabaseService : IDatabaseService
         {
             context.VideoEntries.Add(entry);
             context.SaveChanges();
+            _candidateCache = null;
         }
     }
 
@@ -120,10 +128,13 @@ public sealed class DatabaseService : IDatabaseService
 
     public IEnumerable<VideoEntry> StreamLinkedButMissingOnDisk()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         return context.VideoEntries
             .AsNoTracking()
             .Where(e => e.Status == LinkStatus.Linked && e.LinkedFilePath != null)
+            .OrderByDescending(e => e.LastVerified)
+            .ThenByDescending(e => e.UpdatedAt)
+            .ToList()
             .AsEnumerable();
     }
 
@@ -136,12 +147,38 @@ public sealed class DatabaseService : IDatabaseService
             .ToListAsync();
     }
 
+    public async Task<List<VideoEntry>> GetDownloadCandidatesAsync(int limit)
+    {
+        using var context = CreateContext();
+
+        return await context.VideoEntries
+            .AsNoTracking()
+            .Where(e => e.Status == LinkStatus.Unlinked || e.Status == LinkStatus.Missing)
+            .Where(e => e.Status != LinkStatus.DownloadFailed)
+            .OrderByDescending(e => e.UploadedDate)
+            .ThenBy(e => e.UpdatedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task<int> CountDownloadCandidatesAsync()
+    {
+        using var context = CreateContext();
+
+        return await context.VideoEntries
+            .AsNoTracking()
+            .Where(e => e.Status == LinkStatus.Unlinked || e.Status == LinkStatus.Missing)
+            .Where(e => e.Status != LinkStatus.DownloadFailed)
+            .CountAsync();
+    }
+
     // Used by YoutubeService to update the status of a video entry after parsing new data from the JSON lines.
     public void UpdateVideoEntry(VideoEntry entry)
     {
         using var context = CreateContext();
         context.VideoEntries.Update(entry);
         context.SaveChanges();
+        _candidateCache = null;
     }
 
     // An asynchronous version of the above method, if needed in the future.

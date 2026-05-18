@@ -89,7 +89,7 @@ public sealed class YoutubeService : IYoutubeService
         }
     }
 
-    public async Task<bool> DownloadVideoAsync(VideoEntry entry, string destinationFolder)
+    public async Task<bool> DownloadVideoAsync(VideoEntry entry, string destinationFolder, CancellationToken cancellationToken = default)
     {
         try {
             Log.Information("Starting download of: {Title} ({YoutubeId})", entry.Title, entry.YoutubeId);
@@ -118,7 +118,19 @@ public sealed class YoutubeService : IYoutubeService
 
             using var process = Process.Start(startInfo) ?? throw new Exception("Could not start yt-dlp");
 
-            await process.WaitForExitAsync();
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromMinutes(30)); // Set a timeout for the download to prevent it from hanging indefinitely
+
+            try
+            {
+                await process.WaitForExitAsync(timeoutCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(true);
+                Log.Warning("Download timed out for: {Title} - process killed", entry.Title);
+                return false;
+            }
 
             if (process.ExitCode == 0)
             {

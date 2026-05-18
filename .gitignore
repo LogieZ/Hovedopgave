@@ -1,2 +1,5 @@
 src/VideoArchiveManager/cookies.txt
 /src/VideoArchiveManager/logs
+src/VideoArchiveManager/appsettings.json
+src/VideoArchiveManager/bin/Debug/net8.0/appsettings.json
+Notes.md

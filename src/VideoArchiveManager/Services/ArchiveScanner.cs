@@ -67,8 +67,8 @@ public sealed class ArchiveScanner
                     FileName = Path.GetFileName(filePath),
                     Extension = ext.ToLowerInvariant(),
                     SizeBytes = fileSize,
-                    LastWriteTimeUtc = DateTime.UtcNow,
-                    CreationTimeUtc = DateTime.UtcNow,
+                    LastWriteTimeUtc = File.GetLastWriteTimeUtc(filePath),
+                    CreationTimeUtc = File.GetCreationTimeUtc(filePath),
                     YoutubeId = null // Set to null by default, since local files won't have this info.
                 };
             }

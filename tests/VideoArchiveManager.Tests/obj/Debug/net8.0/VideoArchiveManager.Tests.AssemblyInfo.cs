@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VideoArchiveManager.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1a3cb99e425ba73bda65f5ec04343a2371e206ce")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+518f5f0cd18e385d80e665e6e6c9f719e5fc7bee")]
 [assembly: System.Reflection.AssemblyProductAttribute("VideoArchiveManager.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VideoArchiveManager.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -10,5 +10,7 @@ public interface IDatabaseService
     Task UpdateLink(string youtubeId, string? filePath, long? fileSizeBytes, LinkStatus status);
     IEnumerable<VideoEntry> StreamLinkedButMissingOnDisk();
     Task<List<VideoEntry>> GetAllUnlinkedEntriesAsync();
+    Task<List<VideoEntry>> GetDownloadCandidatesAsync(int limit);
+    Task<int> CountDownloadCandidatesAsync();
     void UpdateVideoEntry(VideoEntry entry);
 }
