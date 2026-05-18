@@ -2,17 +2,16 @@ using System.Diagnostics;
 using System.Text.Json;
 using Serilog;
 using VideoArchiveManager.Interfaces;
-using VideoArchiveManager.Configuration;
 using VideoArchiveManager.Models;
 
 namespace VideoArchiveManager.Services;
 
 public sealed class YoutubeService : IYoutubeService
 {
-    private readonly AppSettings _settings;
+    private readonly IAppSettings _settings;
     private readonly IDatabaseService _db;
 
-    public YoutubeService(AppSettings settings, IDatabaseService db)
+    public YoutubeService(IAppSettings settings, IDatabaseService db)
     {
         _settings = settings;
         _db = db;
@@ -23,7 +22,7 @@ public sealed class YoutubeService : IYoutubeService
         // We use yt-dlp to fetch the list of videos from the channel. The --flat-playlist option gives us a simple JSON output with basic info for each video, and we use --print to include the upload date in a separate line for easier parsing.
         var startInfo = new ProcessStartInfo
         {
-            FileName = "yt-dlp",
+            FileName = _settings.YtDlpPath,
             Arguments = $"--flat-playlist --dump-json --cookies cookies.txt --print \"upload_date:%(upload_date)s\" {channelUrl}",
             RedirectStandardOutput = true,
             UseShellExecute = false,
@@ -101,7 +100,7 @@ public sealed class YoutubeService : IYoutubeService
 
             var startInfo = new ProcessStartInfo
             {
-                FileName = "yt-dlp",
+                FileName = _settings.YtDlpPath,
                 // -f bestvideo+bestaudio/best: Downloads highest quality video and audio and merges to MP4
                 // --merge-output-format mp4: Ensures output is in MP4 format
                 // --restrict-filenames: Removes special characters from filename

@@ -1,17 +1,16 @@
 using System.Text.RegularExpressions;
 using Serilog;
 using VideoArchiveManager.Interfaces;
-using VideoArchiveManager.Configuration;
 using VideoArchiveManager.Models;
 
 namespace VideoArchiveManager.Services;
 
 public sealed class ArchiveScanner
 {
-    private readonly AppSettings _settings;
+    private readonly IAppSettings _settings;
     private readonly IFileSystem _fileSystem;
 
-    public ArchiveScanner(AppSettings settings, IFileSystem fileSystem)
+    public ArchiveScanner(IAppSettings settings, IFileSystem fileSystem)
     {
         _settings = settings;
         _fileSystem = fileSystem;

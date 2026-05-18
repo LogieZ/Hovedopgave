@@ -1,6 +1,5 @@
 using Serilog;
 using VideoArchiveManager.Models;
-using VideoArchiveManager.Configuration;
 using VideoArchiveManager.Interfaces;
 
 namespace VideoArchiveManager.Services;
@@ -8,9 +7,9 @@ namespace VideoArchiveManager.Services;
 public sealed class LinkerService
 {
     private readonly IDatabaseService _db;
-    private readonly AppSettings _settings;
+    private readonly IAppSettings _settings;
 
-    public LinkerService(IDatabaseService db, AppSettings settings)
+    public LinkerService(IDatabaseService db, IAppSettings settings)
     {
         _db = db;
         _settings = settings;

@@ -107,7 +107,7 @@ namespace VideoArchiveManager.Tests.Features
         
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
         {
-            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/SyncMissingFiles.feature.ndjson", 3);
+            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/SyncMissingFiles.feature.ndjson", 7);
         }
         
         async global::System.Threading.Tasks.Task global::Xunit.IAsyncLifetime.InitializeAsync()
@@ -167,6 +167,154 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
 #line 10
     await testRunner.ThenAsync("the YouTube downloader should be triggered for that video", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.SkippableFactAttribute(DisplayName="Download fejler - status bliver DownloadFailed")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Synkronisering af manglende filer")]
+        [global::Xunit.TraitAttribute("Description", "Download fejler - status bliver DownloadFailed")]
+        public async global::System.Threading.Tasks.Task DownloadFejler_StatusBliverDownloadFailed()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "1";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Download fejler - status bliver DownloadFailed", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 12
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 13
+    await testRunner.GivenAsync("a video record exists in the database with status \"Linked\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 14
+    await testRunner.AndAsync("the file is missing on disk", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 15
+    await testRunner.AndAsync("the YouTube downloader fails", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 16
+    await testRunner.WhenAsync("the synchronization process starts", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 17
+    await testRunner.ThenAsync("the video status should be set to \"DownloadFailed\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+#line 18
+    await testRunner.AndAsync("the database should be updated with the new status", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.SkippableFactAttribute(DisplayName="Flere filer mangler - alle skal downloades")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Synkronisering af manglende filer")]
+        [global::Xunit.TraitAttribute("Description", "Flere filer mangler - alle skal downloades")]
+        public async global::System.Threading.Tasks.Task FlereFilerMangler_AlleSkalDownloades()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "2";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Flere filer mangler - alle skal downloades", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 20
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 21
+    await testRunner.GivenAsync("multiple video records exist with status \"Linked\" and missing files", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 22
+    await testRunner.WhenAsync("the synchronization process starts", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 23
+    await testRunner.ThenAsync("all missing files should trigger a download attempt", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.SkippableFactAttribute(DisplayName="Fil med null YoutubeId håndteres gracefully")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Synkronisering af manglende filer")]
+        [global::Xunit.TraitAttribute("Description", "Fil med null YoutubeId håndteres gracefully")]
+        public async global::System.Threading.Tasks.Task FilMedNullYoutubeIdHandteresGracefully()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "3";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Fil med null YoutubeId håndteres gracefully", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 25
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 26
+    await testRunner.GivenAsync("a video record exists with a null LinkedFilePath", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 27
+    await testRunner.WhenAsync("the synchronization process starts", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 28
+    await testRunner.ThenAsync("the video should be skipped gracefully", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Xunit.SkippableFactAttribute(DisplayName="Fil der findes på disk skal ikke downloades igen")]
+        [global::Xunit.TraitAttribute("FeatureTitle", "Synkronisering af manglende filer")]
+        [global::Xunit.TraitAttribute("Description", "Fil der findes på disk skal ikke downloades igen")]
+        public async global::System.Threading.Tasks.Task FilDerFindesPaDiskSkalIkkeDownloadesIgen()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "4";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Fil der findes på disk skal ikke downloades igen", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 30
+this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 31
+    await testRunner.GivenAsync("a video record exists in the database with status \"Linked\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Given ");
+#line hidden
+#line 32
+    await testRunner.AndAsync("the file exists on disk", ((string)(null)), ((global::Reqnroll.Table)(null)), "And ");
+#line hidden
+#line 33
+    await testRunner.WhenAsync("the synchronization process starts", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
+#line hidden
+#line 34
+    await testRunner.ThenAsync("no download should be triggered for that video", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();

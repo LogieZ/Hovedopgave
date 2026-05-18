@@ -20,13 +20,22 @@ try
     {
         ArchiveRootPath = @"F:\DKCTV Filer",
         ConnectionString = "Host=localhost;Database=video_archive;Username=postgres;Password=1234",
-        BatchSize = 100
+        BatchSize = 100,
+        MaxDownloadsPerRun = 5,
+        MaxDownloadRetries = 3,
+        RetryBaseDelaySeconds = 10,
+        InterDownloadDelaySeconds = 20
     };
 
     var serviceCollection = new ServiceCollection();
     serviceCollection.AddSingleton(settings);
+    serviceCollection.AddSingleton<IAppSettings>(settings);
+    serviceCollection.AddScoped<IArchiveDbContextFactory, ArchiveDbContextFactory>();
+    serviceCollection.AddScoped<IVideoTitleMatcher, VideoTitleMatcher>();
     serviceCollection.AddScoped<IDatabaseService, DatabaseService>();
     serviceCollection.AddScoped<IYoutubeService, YoutubeService>();
+    serviceCollection.AddScoped<IDownloadRetryPolicy, LinearBackoffDownloadRetryPolicy>();
+    serviceCollection.AddScoped<IVideoDownloadCoordinator, VideoDownloadCoordinator>();
 
     if (OperatingSystem.IsWindows())
     {
@@ -46,6 +55,7 @@ try
 
     var dbService = serviceProvider.GetRequiredService<IDatabaseService>();
     var youtubeService = serviceProvider.GetRequiredService<IYoutubeService>();
+    var downloadCoordinator = serviceProvider.GetRequiredService<IVideoDownloadCoordinator>();
     var scanner = serviceProvider.GetRequiredService<ArchiveScanner>();
     var linker = serviceProvider.GetRequiredService<LinkerService>();
     
@@ -67,64 +77,13 @@ try
     var unlinkedVideos = await dbService.GetAllUnlinkedEntriesAsync();
 
     var missingVideos = unlinkedVideos
-        .Take(1) // We take 5 at a time to be safe
+        .Take(settings.MaxDownloadsPerRun)
         .ToList();
 
     if (missingVideos.Any())
     {
-        Log.Information("There are {Count} videos missing locally. Starting download of the first 5...", unlinkedVideos.Count);
-
-        foreach (var video in missingVideos)
-        {
-            if (cts.Token.IsCancellationRequested) break;
-
-            int maxRetries = 3;
-            bool downloadSuccess = false;
-
-            for (int attempt = 1; attempt <= maxRetries; attempt++)
-            {
-                if (cts.Token.IsCancellationRequested) break;
-
-                try
-                {
-                    if (attempt > 1)
-                    {
-                        Log.Warning("Retry attempt {Attempt} of {MaxRetries} for video {Title}", attempt, maxRetries, video.Title);
-                    }
-
-                    downloadSuccess = await youtubeService.DownloadVideoAsync(video, settings.ArchiveRootPath);
-
-                    if (downloadSuccess)
-                    {
-                        Log.Information("Successfully downloaded video: {Title}", video.Title);
-
-                        Log.Information("Waiting 20 seconds before the next download..."); // To avoid YouTube becoming suspicious
-                        await Task.Delay(20000, cts.Token);
-
-                        break;
-                    }
-                    else
-                    {
-                        throw new Exception("Download returned false (yt-dlp failed)");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error("Attempt {Attempt} failed for video {Title}. Error: {Message}", attempt, video.Title, ex.Message);
-
-                    if (attempt == maxRetries)
-                    {
-                        Log.Fatal("All {MaxRetries} attempts failed. Skipping video: {Title}", maxRetries, video.Title);
-                    }
-                    else
-                    {
-                        int backoffDelay = attempt * 10000; // Exponential backoff: 10s, 20s, 30s
-                        Log.Warning("Network or API issue. Waiting {Seconds} seconds before retrying...", backoffDelay / 1000);
-                        await Task.Delay(backoffDelay, cts.Token);
-                    }
-                }
-            }
-        }
+        Log.Information("There are {Count} videos missing locally. Starting download of up to {MaxCount}...", unlinkedVideos.Count, settings.MaxDownloadsPerRun);
+        await downloadCoordinator.DownloadMissingAsync(missingVideos, cts.Token);
     }
     else
     {

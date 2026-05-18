@@ -4,7 +4,6 @@ using NSubstitute;
 using VideoArchiveManager.Interfaces;
 using VideoArchiveManager.Models;
 using VideoArchiveManager.Services;
-using VideoArchiveManager.Configuration;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -17,22 +16,15 @@ public class SyncMissingFilesSteps
     private readonly IFileSystem _mockFileSystem = Substitute.For<IFileSystem>();
     private readonly IYoutubeService _mockYoutube = Substitute.For<IYoutubeService>();
 
-    private readonly AppSettings _settings;
-    private readonly ArchiveScanner _scanner;
+    private readonly MissingFileSynchronizationService _syncService;
 
-    private LinkerService? _linker;
     private VideoEntry? _fakeDbEntry;
-    private string _fakeFilePath = @"F:\DKCTV Filer\Manglende_Video.mp4";
+    private readonly string _fakeFilePath = @"F:\DKCTV Filer\Manglende_Video.mp4";
+    private List<VideoEntry> _multipleEntries = new();
 
     public SyncMissingFilesSteps()
     {
-        _settings = new AppSettings 
-        { 
-            ArchiveRootPath = @"F:\DKCTV Filer",
-            BatchSize = 10,
-            VideoExtensions = new HashSet<string> { ".mp4"}
-        };
-        _scanner = new ArchiveScanner(_settings, _mockFileSystem);
+        _syncService = new MissingFileSynchronizationService(_mockDb, _mockFileSystem, _mockYoutube);
     }
 
     [Given(@"a video record exists in the database with status ""Linked""")]
@@ -54,32 +46,127 @@ public class SyncMissingFilesSteps
     {
         // We simulate that the file system returns FALSE when the program checks if the path exists
         _mockFileSystem.FileExists(_fakeFilePath).Returns(false);
+        _mockYoutube.DownloadVideoAsync(Arg.Any<VideoEntry>(), Arg.Any<string>()).Returns(true);
     }
 
     [When(@"the synchronization process starts")]
     public async Task WhenTheSynchronizationProcessStarts()
     {
-        // Here we initialize the sync/linker logic
-        _linker = new LinkerService(_mockDb, _settings);
-
-        var missingVideos = _mockDb.StreamLinkedButMissingOnDisk();
-        foreach (var video in missingVideos)
-        {
-            if (!_mockFileSystem.FileExists(video.LinkedFilePath!))
-            {
-                video.Status = LinkStatus.Downloading;
-                await _mockYoutube.DownloadVideoAsync(video, video.LinkedFilePath!);
-            }
-        }
+        await _syncService.SyncMissingLinkedFilesAsync();
     }
 
     [Then(@"the YouTube downloader should be triggered for that video")]
     public async Task ThenTheYoutubeDownloaderShouldBeTriggeredForThatVideo()
     {
-        // ASSERTION: We verify via our YouTube mock that the downloader was called with the correct YouTube ID and file path
-        await _mockYoutube.Received(1).DownloadVideoAsync(_fakeDbEntry!, _fakeFilePath);
+        _fakeDbEntry.Should().NotBeNull();
+        var expectedDestinationFolder = Path.GetDirectoryName(_fakeFilePath)!;
+        await _mockYoutube.Received(1).DownloadVideoAsync(_fakeDbEntry!, expectedDestinationFolder);
 
-        // We can also verify that the status in the database temporarily changes to "Downloading"
         _fakeDbEntry.Status.Should().Be(LinkStatus.Downloading);
+        _mockDb.Received().UpdateVideoEntry(_fakeDbEntry!);
+    }
+
+    [Given(@"the YouTube downloader fails")]
+    public void GivenTheYoutubeDownloaderFails()
+    {
+        _mockYoutube.DownloadVideoAsync(Arg.Any<VideoEntry>(), Arg.Any<string>()).Returns(false);
+    }
+
+    [Then(@"the video status should be set to ""DownloadFailed""")]
+    public void ThenTheVideoStatusShouldBeSetToDownloadFailed()
+    {
+        _fakeDbEntry.Should().NotBeNull();
+        _fakeDbEntry.Status.Should().Be(LinkStatus.DownloadFailed);
+    }
+
+    [Then(@"the database should be updated with the new status")]
+    public void ThenTheDatabaseShouldBeUpdatedWithTheNewStatus()
+    {
+        _mockDb.Received().UpdateVideoEntry(_fakeDbEntry!);
+    }
+
+    [Given(@"multiple video records exist with status ""Linked"" and missing files")]
+    public void GivenMultipleVideoRecordsExistWithStatusLinkedAndMissingFiles()
+    {
+        _multipleEntries = new()
+        {
+            new VideoEntry
+            {
+                YoutubeId = "video1",
+                Title = "Video 1",
+                Status = LinkStatus.Linked,
+                LinkedFilePath = @"F:\DKCTV Filer\Video1.mp4"
+            },
+            new VideoEntry
+            {
+                YoutubeId = "video2",
+                Title = "Video 2",
+                Status = LinkStatus.Linked,
+                LinkedFilePath = @"F:\DKCTV Filer\Video2.mp4"
+            },
+            new VideoEntry
+            {
+                YoutubeId = "video3",
+                Title = "Video 3",
+                Status = LinkStatus.Linked,
+                LinkedFilePath = @"F:\DKCTV Filer\Video3.mp4"
+            }
+        };
+
+        _mockDb.StreamLinkedButMissingOnDisk().Returns(_multipleEntries);
+        _mockFileSystem.FileExists(Arg.Any<string>()).Returns(false);
+        _mockYoutube.DownloadVideoAsync(Arg.Any<VideoEntry>(), Arg.Any<string>()).Returns(true);
+    }
+
+    [Then(@"all missing files should trigger a download attempt")]
+    public async Task ThenAllMissingFilesShouldTriggerADownloadAttempt()
+    {
+        _multipleEntries.Should().HaveCount(3);
+        
+        foreach (var entry in _multipleEntries)
+        {
+            var destinationFolder = Path.GetDirectoryName(entry.LinkedFilePath!)!;
+            await _mockYoutube.Received(1).DownloadVideoAsync(entry, destinationFolder);
+        }
+    }
+
+    [Given(@"a video record exists with a null LinkedFilePath")]
+    public void GivenAVideoRecordExistsWithNullLinkedFilePath()
+    {
+        _fakeDbEntry = new VideoEntry
+        {
+            YoutubeId = "nullPathVideo",
+            Title = "Video with Null Path",
+            Status = LinkStatus.Linked,
+            LinkedFilePath = null
+        };
+
+        _mockDb.StreamLinkedButMissingOnDisk().Returns(new List<VideoEntry> { _fakeDbEntry });
+    }
+
+    [Then(@"the video should be skipped gracefully")]
+    public async Task ThenTheVideoShouldBeSkippedGracefully()
+    {
+        await _mockYoutube.DidNotReceive().DownloadVideoAsync(Arg.Any<VideoEntry>(), Arg.Any<string>());
+    }
+
+    [Given(@"the file exists on disk")]
+    public void GivenTheFileExistsOnDisk()
+    {
+        _mockFileSystem.FileExists(_fakeFilePath).Returns(true);
+        _fakeDbEntry = new VideoEntry
+        {
+            YoutubeId = "existingFile",
+            Title = "Existing Video",
+            Status = LinkStatus.Linked,
+            LinkedFilePath = _fakeFilePath
+        };
+        _mockDb.StreamLinkedButMissingOnDisk().Returns(new List<VideoEntry> { _fakeDbEntry });
+    }
+
+    [Then(@"no download should be triggered for that video")]
+    public async Task ThenNoDownloadShouldBeTriggeredForThatVideo()
+    {
+        await _mockYoutube.DidNotReceive().DownloadVideoAsync(Arg.Any<VideoEntry>(), Arg.Any<string>());
     }
 }

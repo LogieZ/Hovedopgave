@@ -1,6 +1,8 @@
 namespace VideoArchiveManager.Configuration;
 
-public sealed class AppSettings
+using VideoArchiveManager.Interfaces;
+
+public sealed class AppSettings : IAppSettings
 {
     public string ArchiveRootPath { get; set; } = string.Empty;
 
@@ -24,4 +26,12 @@ public sealed class AppSettings
     public string LogPath { get; set; } = "logs/archive-.log";
 
     public string ChannelUrl { get; set; } = "https://www.youtube.com/@DanmarkCTV/videos";
+
+    public int MaxDownloadsPerRun { get; set; } = 5;
+
+    public int MaxDownloadRetries { get; set; } = 3;
+
+    public int RetryBaseDelaySeconds { get; set; } = 10;
+
+    public int InterDownloadDelaySeconds { get; set; } = 20;
 }
