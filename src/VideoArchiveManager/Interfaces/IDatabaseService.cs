@@ -5,12 +5,15 @@ namespace VideoArchiveManager.Interfaces;
 public interface IDatabaseService
 {
     VideoEntry? FindByYoutubeId(string youtubeId);
-    VideoEntry? FindBestMatchByTitle(string title);
+    VideoEntry? FindBestMatchByTitle(string title, long fileDurationSeconds = 0, string filePath = "");
     void AddVideoEntry(VideoEntry entry);
     Task UpdateLink(string youtubeId, string? filePath, long? fileSizeBytes, LinkStatus status);
     IEnumerable<VideoEntry> StreamLinkedButMissingOnDisk();
-    Task<List<VideoEntry>> GetAllUnlinkedEntriesAsync();
+
+    Task<List<VideoEntry>> GetEntriesMissingUploadedDateAsync(int limit);
+    Task<int> CountEntriesMissingUploadedDateAsync();
     Task<List<VideoEntry>> GetDownloadCandidatesAsync(int limit);
     Task<int> CountDownloadCandidatesAsync();
-    void UpdateVideoEntry(VideoEntry entry);
+    Task<int> ResetStuckDownloadsAsync();
+    Task UpdateVideoEntryAsync(VideoEntry entry);
 }

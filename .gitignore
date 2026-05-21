@@ -3,3 +3,6 @@ src/VideoArchiveManager/cookies.txt
 src/VideoArchiveManager/appsettings.json
 src/VideoArchiveManager/bin/Debug/net8.0/appsettings.json
 Notes.md
+tests/VideoArchiveManager.Tests/bin/Debug/net8.0/appsettings.json
+todo.md
+/tests/VideoArchiveManager.Tests/bin/Debug

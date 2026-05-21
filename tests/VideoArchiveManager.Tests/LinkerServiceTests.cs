@@ -6,7 +6,6 @@ using VideoArchiveManager.Services;
 using VideoArchiveManager.Models;
 using VideoArchiveManager.Configuration;
 using System.Collections.Generic;
-using NSubstitute.ExceptionExtensions;
 
 namespace VideoArchiveManager.Tests;
 
@@ -33,7 +32,7 @@ public class LinkerServiceTests
 
         // Create the ArchiveScanner and LinkerService with the mocked dependencies
         _scanner = new ArchiveScanner(_settings, _mockFileSystem);
-        _linker = new LinkerService(_mockDb, _settings);
+        _linker = new LinkerService(_mockDb, _settings, _mockFileSystem);
     }
 
     [Theory]
@@ -64,7 +63,7 @@ public class LinkerServiceTests
             Status = LinkStatus.Unlinked
         };
 
-        _mockDb.FindBestMatchByTitle(realFileName).Returns(fakeDbEntry);
+        _mockDb.FindBestMatchByTitle(realFileName, Arg.Any<long>(), Arg.Any<string>()).Returns(fakeDbEntry);
 
         // Act
         var report = await _linker.LinkAsync(_scanner);
@@ -92,7 +91,7 @@ public class LinkerServiceTests
             .Returns(new List<string> { fakeFilePath});
         _mockFileSystem.GetFileSize(fakeFilePath).Returns(5000L);
 
-        _mockDb.FindBestMatchByTitle(fileNameOnly).Returns((VideoEntry?)null);
+        _mockDb.FindBestMatchByTitle(fileNameOnly, Arg.Any<long>(), Arg.Any<string>()).Returns((VideoEntry?)null);
 
         // Act
         var report = await _linker.LinkAsync(_scanner);
@@ -107,6 +106,8 @@ public class LinkerServiceTests
             Arg.Any<string>(), 
             Arg.Any<long>(), 
             Arg.Any<LinkStatus>());
+
+        _mockFileSystem.DidNotReceive().GetDurationSeconds(Arg.Any<string>());
     }
 
     [Fact]
@@ -119,7 +120,7 @@ public class LinkerServiceTests
             .Returns(new List<string> { fakeFilePath});
 
         _mockFileSystem.GetFileSize(fakeFilePath)
-            .Throws(new IOException("The file is corrupted or locked by another process."));
+            .Returns(_ => throw new IOException("The file is corrupted or locked by another process."));
 
         // Act
         var report = await _linker.LinkAsync(_scanner);
@@ -152,7 +153,7 @@ public class LinkerServiceTests
             LinkedFilePath = fakeFilePath,
             Status = LinkStatus.Linked
         };
-        _mockDb.FindBestMatchByTitle(fileNameOnly).Returns(alreadyLinkedEntry);
+        _mockDb.FindBestMatchByTitle(fileNameOnly, Arg.Any<long>(), Arg.Any<string>()).Returns(alreadyLinkedEntry);
 
         // Act
         var report = await _linker.LinkAsync(_scanner);
@@ -166,5 +167,73 @@ public class LinkerServiceTests
             Arg.Any<string>(), 
             Arg.Any<long>(), 
             Arg.Any<LinkStatus>());
+    }
+
+    [Fact]
+    public async Task LinkAsync_WhenFileExtensionIsNotAllowed_ShouldIgnoreFile()
+    {
+        // Arrange
+        var txtPath = @"F:\DKCTV Filer\NotAVideo.txt";
+        _settings.VideoExtensions = new HashSet<string> { ".mp4" };
+
+        _mockFileSystem.EnumerateFiles(_settings.ArchiveRootPath)
+            .Returns(new List<string> { txtPath });
+
+        // Act
+        var report = await _linker.LinkAsync(_scanner);
+
+        // Assert
+        report.NewlyLinked.Should().Be(0);
+        report.UnmatchedFileNames.Should().BeEmpty();
+
+        _mockDb.DidNotReceive().FindByYoutubeId(Arg.Any<string>());
+        _mockDb.DidNotReceive().FindBestMatchByTitle(Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string>());
+        await _mockDb.DidNotReceive().UpdateLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<LinkStatus>());
+    }
+
+    [Fact]
+    public async Task LinkAsync_WhenCancelled_ShouldThrowOperationCanceledException()
+    {
+        // Arrange
+        var fakeFilePath = @"F:\DKCTV Filer\AnyVideo.mp4";
+        _mockFileSystem.EnumerateFiles(_settings.ArchiveRootPath)
+            .Returns(new List<string> { fakeFilePath });
+        _mockFileSystem.GetFileSize(fakeFilePath).Returns(1000L);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Act
+        Func<Task> act = async () => await _linker.LinkAsync(_scanner, cts.Token);
+
+        // Assert
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task LinkAsync_WhenDatabaseUpdateFails_ShouldBubbleUpException()
+    {
+        // Arrange
+        var fakeFilePath = @"F:\DKCTV Filer\Nyhedsudsendelse.mp4";
+        _mockFileSystem.EnumerateFiles(_settings.ArchiveRootPath)
+            .Returns(new List<string> { fakeFilePath });
+        _mockFileSystem.GetFileSize(fakeFilePath).Returns(4096L);
+
+        var match = new VideoEntry
+        {
+            YoutubeId = "abc123xyz45",
+            Title = "Nyhedsudsendelse",
+            Status = LinkStatus.Unlinked
+        };
+
+        _mockDb.FindBestMatchByTitle("Nyhedsudsendelse.mp4", Arg.Any<long>(), fakeFilePath).Returns(match);
+        _mockDb.UpdateLink(match.YoutubeId, fakeFilePath, 4096L, LinkStatus.Linked)
+            .Returns(_ => throw new InvalidOperationException("DB write failed"));
+
+        // Act
+        Func<Task> act = async () => await _linker.LinkAsync(_scanner);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 }

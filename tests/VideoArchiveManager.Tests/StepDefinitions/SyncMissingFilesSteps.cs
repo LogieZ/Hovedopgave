@@ -3,7 +3,6 @@ using FluentAssertions;
 using NSubstitute;
 using VideoArchiveManager.Interfaces;
 using VideoArchiveManager.Models;
-using VideoArchiveManager.Services;
 using VideoArchiveManager.Configuration;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -15,12 +14,7 @@ public class SyncMissingFilesSteps
 {
     private readonly IDatabaseService _mockDb = Substitute.For<IDatabaseService>();
     private readonly IFileSystem _mockFileSystem = Substitute.For<IFileSystem>();
-    private readonly IYoutubeService _mockYoutube = Substitute.For<IYoutubeService>();
-
     private readonly AppSettings _settings;
-    private readonly ArchiveScanner _scanner;
-
-    private LinkerService? _linker;
     private VideoEntry? _fakeDbEntry;
     private string _fakeFilePath = @"F:\DKCTV Filer\Manglende_Video.mp4";
 
@@ -32,7 +26,6 @@ public class SyncMissingFilesSteps
             BatchSize = 10,
             VideoExtensions = new HashSet<string> { ".mp4"}
         };
-        _scanner = new ArchiveScanner(_settings, _mockFileSystem);
     }
 
     [Given(@"a video record exists in the database with status ""Linked""")]
@@ -59,27 +52,24 @@ public class SyncMissingFilesSteps
     [When(@"the synchronization process starts")]
     public async Task WhenTheSynchronizationProcessStarts()
     {
-        // Here we initialize the sync/linker logic
-        _linker = new LinkerService(_mockDb, _settings);
-
+        // Simulate the missing-file verification phase from Program.cs.
         var missingVideos = _mockDb.StreamLinkedButMissingOnDisk();
         foreach (var video in missingVideos)
         {
             if (!_mockFileSystem.FileExists(video.LinkedFilePath!))
             {
-                video.Status = LinkStatus.Downloading;
-                await _mockYoutube.DownloadVideoAsync(video, video.LinkedFilePath!);
+                video.MarkAsMissing();
+                await _mockDb.UpdateLink(video.YoutubeId, null, null, LinkStatus.Missing);
             }
         }
     }
 
-    [Then(@"the YouTube downloader should be triggered for that video")]
-    public async Task ThenTheYoutubeDownloaderShouldBeTriggeredForThatVideo()
+    [Then(@"the database entry should be marked as ""Missing""")]
+    public async Task ThenTheDatabaseEntryShouldBeMarkedAsMissing()
     {
-        // ASSERTION: We verify via our YouTube mock that the downloader was called with the correct YouTube ID and file path
-        await _mockYoutube.Received(1).DownloadVideoAsync(_fakeDbEntry!, _fakeFilePath);
+        await _mockDb.Received(1).UpdateLink(_fakeDbEntry!.YoutubeId, null, null, LinkStatus.Missing);
 
-        // We can also verify that the status in the database temporarily changes to "Downloading"
-        _fakeDbEntry.Status.Should().Be(LinkStatus.Downloading);
+        _fakeDbEntry.Status.Should().Be(LinkStatus.Missing);
+        _fakeDbEntry.LinkedFilePath.Should().BeNull();
     }
 }

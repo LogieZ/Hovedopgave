@@ -8,18 +8,24 @@ public sealed class AppSettings
 
     public string YtDlpPath { get; set; } = "yt-dlp";
 
-    public string DownloadOutputPath { get; set; } = "downloads";
-
     public HashSet<string> VideoExtensions { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
         ".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm"
     };
 
-    public int MaxConcurrency { get; set; } = 2;
-
     public int BatchSize { get; set; } = 500;
 
-    public bool DownloadMissing { get; set; } = false;
+    public int MetadataEnrichmentBatchSize { get; set; } = 50;
+
+    public bool DownloadEnabled { get; set; } = true;
+
+    public int DownloadBatchSize { get; set; } = 5;
+
+    public int DownloadRetryCount { get; set; } = 3;
+
+    public int DownloadRetryBaseDelayMs { get; set; } = 10000;
+
+    public int DownloadCooldownMs { get; set; } = 20000;
 
     public string LogPath { get; set; } = "logs/archive-.log";
 

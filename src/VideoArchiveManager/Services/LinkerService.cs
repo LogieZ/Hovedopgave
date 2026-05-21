@@ -9,11 +9,13 @@ public sealed class LinkerService
 {
     private readonly IDatabaseService _db;
     private readonly AppSettings _settings;
+    private readonly IFileSystem _fileSystem;
 
-    public LinkerService(IDatabaseService db, AppSettings settings)
+    public LinkerService(IDatabaseService db, AppSettings settings, IFileSystem fileSystem)
     {
         _db = db;
         _settings = settings;
+        _fileSystem = fileSystem;
     }
 
     public async Task<LinkReport> LinkAsync(
@@ -65,15 +67,35 @@ public sealed class LinkerService
 
             if (entry == null)
             {
-                entry = _db.FindBestMatchByTitle(file.FileName);
+                // First pass: cheap title-only matching (no ffprobe duration yet).
+                entry = _db.FindBestMatchByTitle(file.FileName, 0, file.FilePath);
             }
 
             if (entry != null)
             {
-                if (entry.Status == LinkStatus.Linked && entry.LinkedFilePath == file.FilePath)
+                if (entry.Status == LinkStatus.Linked)
                 {
                     report.AlreadyLinked++;
                     continue;
+                }
+
+                // Second pass: only now resolve duration and reconfirm match.
+                long durationSeconds = file.Duration;
+                if (durationSeconds <= 0)
+                {
+                    durationSeconds = _fileSystem.GetDurationSeconds(file.FilePath);
+                }
+
+                if (durationSeconds > 0)
+                {
+                    var durationVerifiedEntry = _db.FindBestMatchByTitle(file.FileName, durationSeconds, file.FilePath);
+                    if (durationVerifiedEntry == null)
+                    {
+                        report.UnmatchedFileNames.Add(file.FileName);
+                        continue;
+                    }
+
+                    entry = durationVerifiedEntry;
                 }
 
                 await _db.UpdateLink(entry.YoutubeId, file.FilePath, file.SizeBytes, LinkStatus.Linked);

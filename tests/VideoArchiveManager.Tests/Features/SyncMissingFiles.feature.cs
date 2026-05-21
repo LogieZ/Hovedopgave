@@ -25,8 +25,7 @@ namespace VideoArchiveManager.Tests.Features
         private static string[] featureTags = ((string[])(null));
         
         private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("en-US"), "Features", "Synkronisering af manglende filer", "    For at sikre at det lokale videoarkiv er komplet\r\n    Som systemadministrator" +
-                "\r\n    Ønkser jeg, at manglende lokale filer automatisk downloades fra YouTube ig" +
-                "en", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
+                "\r\n    Ønsker jeg, at manglende lokale filer markeres korrekt i databasen", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
         
         private global::Xunit.Abstractions.ITestOutputHelper _testOutputHelper;
         
@@ -135,15 +134,15 @@ namespace VideoArchiveManager.Tests.Features
             await this.TestTearDownAsync();
         }
         
-        [global::Xunit.SkippableFactAttribute(DisplayName="Download genstartes hvis en linket fil mangler på disken")]
+        [global::Xunit.SkippableFactAttribute(DisplayName="Linket fil markeres som Missing hvis den mangler på disken")]
         [global::Xunit.TraitAttribute("FeatureTitle", "Synkronisering af manglende filer")]
-        [global::Xunit.TraitAttribute("Description", "Download genstartes hvis en linket fil mangler på disken")]
-        public async global::System.Threading.Tasks.Task DownloadGenstartesHvisEnLinketFilManglerPaDisken()
+        [global::Xunit.TraitAttribute("Description", "Linket fil markeres som Missing hvis den mangler på disken")]
+        public async global::System.Threading.Tasks.Task LinketFilMarkeresSomMissingHvisDenManglerPaDisken()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "0";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Download genstartes hvis en linket fil mangler på disken", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Linket fil markeres som Missing hvis den mangler på disken", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 6
@@ -166,7 +165,7 @@ this.ScenarioInitialize(scenarioInfo, ruleInfo);
     await testRunner.WhenAsync("the synchronization process starts", ((string)(null)), ((global::Reqnroll.Table)(null)), "When ");
 #line hidden
 #line 10
-    await testRunner.ThenAsync("the YouTube downloader should be triggered for that video", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
+    await testRunner.ThenAsync("the database entry should be marked as \"Missing\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Then ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();

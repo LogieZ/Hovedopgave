@@ -65,10 +65,9 @@ public sealed class ArchiveScanner
                 {
                     FilePath = filePath,
                     FileName = Path.GetFileName(filePath),
-                    Extension = ext.ToLowerInvariant(),
+                    // Defer ffprobe duration until a plausible DB candidate exists.
+                    Duration = 0,
                     SizeBytes = fileSize,
-                    LastWriteTimeUtc = File.GetLastWriteTimeUtc(filePath),
-                    CreationTimeUtc = File.GetCreationTimeUtc(filePath),
                     YoutubeId = null // Set to null by default, since local files won't have this info.
                 };
             }

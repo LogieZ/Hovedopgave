@@ -1,5 +1,4 @@
 using Serilog;
-using Serilog.Events;
 using Microsoft.Extensions.DependencyInjection;
 using VideoArchiveManager.Interfaces;
 using VideoArchiveManager.Configuration;
@@ -9,27 +8,40 @@ using Microsoft.Extensions.Configuration;
 using System.Diagnostics;
 
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Debug()
+    .MinimumLevel.Information()
     .WriteTo.Console()
-    .WriteTo.File("logs/archive-.txt", rollingInterval: RollingInterval.Day)
     .CreateLogger();
 
 try
 {
     Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal;
-    Log.Information("=== Video Archive Manager Starter ===");
-
     var config = new ConfigurationBuilder()
         .AddJsonFile("appsettings.json", optional: false)
         .Build();
-    
+
     var settings = new AppSettings
     {
-        ArchiveRootPath = config["ArchiveRootPath"]!,
-        ConnectionString = config["ConnectionString"]!,
-        ChannelUrl = config["ChannelUrl"]!,
-        BatchSize = int.Parse(config["BatchSize"] ?? "100")
+        ArchiveRootPath = config["ArchiveRootPath"] ?? throw new InvalidOperationException("Missing required setting: ArchiveRootPath"),
+        ConnectionString = config["ConnectionString"] ?? throw new InvalidOperationException("Missing required setting: ConnectionString"),
+        ChannelUrl = config["ChannelUrl"] ?? throw new InvalidOperationException("Missing required setting: ChannelUrl"),
+        BatchSize = int.TryParse(config["BatchSize"], out var batchSize) ? batchSize : 100,
+        MetadataEnrichmentBatchSize = int.TryParse(config["MetadataEnrichmentBatchSize"], out var metadataBatchSize) ? metadataBatchSize : 50,
+        YtDlpPath = config["YtDlpPath"] ?? "yt-dlp",
+        LogPath = config["LogPath"] ?? "logs/archive-.txt",
+        DownloadEnabled = bool.TryParse(config["DownloadEnabled"], out var downloadEnabled) ? downloadEnabled : true,
+        DownloadBatchSize = int.TryParse(config["DownloadBatchSize"], out var downloadBatchSize) ? downloadBatchSize : 5,
+        DownloadRetryCount = int.TryParse(config["DownloadRetryCount"], out var retryCount) ? retryCount : 3,
+        DownloadRetryBaseDelayMs = int.TryParse(config["DownloadRetryBaseDelayMs"], out var retryDelayMs) ? retryDelayMs : 10000,
+        DownloadCooldownMs = int.TryParse(config["DownloadCooldownMs"], out var cooldownMs) ? cooldownMs : 20000
     };
+
+    Log.Logger = new LoggerConfiguration()
+        .MinimumLevel.Information()
+        .WriteTo.Console()
+        .WriteTo.File(settings.LogPath, rollingInterval: RollingInterval.Day)
+        .CreateLogger();
+
+    Log.Information("=== Video Archive Manager Starter ===");
 
     var serviceCollection = new ServiceCollection();
     serviceCollection.AddSingleton(settings);
@@ -65,28 +77,75 @@ try
         Log.Warning("Stop signal received. Exiting gracefully...");
     };
 
-    await youtubeService.ImportChannelVideosAsync(settings.ChannelUrl);
+    await PhasePerformanceLogger.MeasureAsync(
+        "Import channel videos",
+        () => youtubeService.ImportChannelVideosAsync(settings.ChannelUrl));
+
+    if (settings.MetadataEnrichmentBatchSize > 0)
+    {
+        var missingUploadedDateBefore = await dbService.CountEntriesMissingUploadedDateAsync();
+
+        if (missingUploadedDateBefore > 0)
+        {
+            Log.Information(
+                "Starting metadata enrichment for up to {Limit} entries missing UploadedDate (currently missing: {MissingBefore})...",
+                settings.MetadataEnrichmentBatchSize,
+                missingUploadedDateBefore);
+
+            var enrichedCount = await PhasePerformanceLogger.MeasureAsync(
+                "Metadata enrichment",
+                () => youtubeService.EnrichMissingMetadataAsync(settings.MetadataEnrichmentBatchSize, cts.Token));
+            var missingUploadedDateAfter = await dbService.CountEntriesMissingUploadedDateAsync();
+
+            Log.Information(
+                "Metadata enrichment complete: updated {Count} entries. Missing UploadedDate now: {MissingAfter}.",
+                enrichedCount,
+                missingUploadedDateAfter);
+        }
+        else
+        {
+            Log.Information("Skipping metadata enrichment: all entries already have UploadedDate.");
+        }
+    }
+
+    // Recover any videos that were left in Downloading state from a previous crashed run.
+    var stuckCount = await PhasePerformanceLogger.MeasureAsync(
+        "Reset stuck downloads",
+        () => dbService.ResetStuckDownloadsAsync());
+    if (stuckCount > 0)
+    {
+        Log.Warning("Recovery: Reset {Count} video(s) stuck in Downloading state back to Unlinked.", stuckCount);
+    }
 
     Log.Information("Starting scan and match of archive: {Path}", settings.ArchiveRootPath);
 
-    var report = await linker.LinkAsync(scanner, cts.Token);
+    var report = await PhasePerformanceLogger.MeasureAsync(
+        "Scan and link archive",
+        () => linker.LinkAsync(scanner, cts.Token));
 
     Log.Information("Checking linked entries for files missing on disk...");
 
-    var linkedEntries = dbService.StreamLinkedButMissingOnDisk();
-    int brokenLinks = 0;
-
-    foreach (var entry in linkedEntries)
-    {
-        if (cts.Token.IsCancellationRequested) break;
-        if (string.IsNullOrWhiteSpace(entry.LinkedFilePath)) continue;
-
-        if (!fileSystem.FileExists(entry.LinkedFilePath))
+    var brokenLinks = await PhasePerformanceLogger.MeasureAsync(
+        "Verify linked files on disk",
+        async () =>
         {
-            await dbService.UpdateLink(entry.YoutubeId, null, null, LinkStatus.Missing);
-            brokenLinks++;
-        }
-    }
+            var linkedEntries = dbService.StreamLinkedButMissingOnDisk();
+            int missingLinkCount = 0;
+
+            foreach (var entry in linkedEntries)
+            {
+                if (cts.Token.IsCancellationRequested) break;
+                if (string.IsNullOrWhiteSpace(entry.LinkedFilePath)) continue;
+
+                if (!fileSystem.FileExists(entry.LinkedFilePath))
+                {
+                    await dbService.UpdateLink(entry.YoutubeId, null, null, LinkStatus.Missing);
+                    missingLinkCount++;
+                }
+            }
+
+            return missingLinkCount;
+        });
 
     if (brokenLinks > 0)
     {
@@ -96,72 +155,82 @@ try
     Log.Information("Checking if any missing videos need to be downloaded...");
 
     var totalMissingCount = await dbService.CountDownloadCandidatesAsync();
-    var missingVideos = await dbService.GetDownloadCandidatesAsync(5);
+    var effectiveDownloadBatchSize = settings.DownloadEnabled ? settings.DownloadBatchSize : 0;
+    var missingVideos = await dbService.GetDownloadCandidatesAsync(effectiveDownloadBatchSize);
 
-    if (missingVideos.Any())
+    if (!settings.DownloadEnabled)
     {
-        Log.Information(
-            "There are {TotalMissing} videos missing locally. Starting download of {BatchCount} video(s) this run (max 5).",
-            totalMissingCount,
-            missingVideos.Count);
+        Log.Information("Download step is disabled by configuration (DownloadEnabled=false).");
+    }
 
-        foreach (var video in missingVideos)
+    await PhasePerformanceLogger.MeasureAsync(
+        "Download missing videos",
+        async () =>
         {
-            if (cts.Token.IsCancellationRequested) break;
-
-            int maxRetries = 3;
-            bool downloadSuccess = false;
-
-            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            if (missingVideos.Any())
             {
-                if (cts.Token.IsCancellationRequested) break;
+                Log.Information(
+                    "There are {TotalMissing} videos missing locally. Starting download of {BatchCount} video(s) this run (max {ConfiguredBatch}).",
+                    totalMissingCount,
+                    missingVideos.Count,
+                    effectiveDownloadBatchSize);
 
-                try
+                foreach (var video in missingVideos)
                 {
-                    if (attempt > 1)
-                    {
-                        Log.Warning("Retry attempt {Attempt} of {MaxRetries} for video {Title}", attempt, maxRetries, video.Title);
-                    }
+                    if (cts.Token.IsCancellationRequested) break;
 
-                    downloadSuccess = await youtubeService.DownloadVideoAsync(video, settings.ArchiveRootPath, cts.Token);
+                    int maxRetries = Math.Max(1, settings.DownloadRetryCount);
+                    bool downloadSuccess = false;
 
-                    if (downloadSuccess)
+                    for (int attempt = 1; attempt <= maxRetries; attempt++)
                     {
-                        Log.Information("Successfully downloaded video: {Title}", video.Title);
+                        if (cts.Token.IsCancellationRequested) break;
 
-                        Log.Information("Waiting 20 seconds before the next download..."); // To avoid YouTube becoming suspicious
-                        await Task.Delay(20000, cts.Token);
+                        try
+                        {
+                            if (attempt > 1)
+                            {
+                                Log.Warning("Retry attempt {Attempt} of {MaxRetries} for video {Title}", attempt, maxRetries, video.Title);
+                            }
 
-                        break;
-                    }
-                    else
-                    {
-                        throw new Exception("Download returned false (yt-dlp failed)");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error("Attempt {Attempt} failed for video {Title}. Error: {Message}", attempt, video.Title, ex.Message);
+                            downloadSuccess = await youtubeService.DownloadVideoAsync(video, settings.ArchiveRootPath, cts.Token);
 
-                    if (attempt == maxRetries)
-                    {
-                        Log.Fatal("All {MaxRetries} attempts failed. Skipping video: {Title}", maxRetries, video.Title);
-                        await dbService.UpdateLink(video.YoutubeId, null, null, LinkStatus.DownloadFailed);
-                    }
-                    else
-                    {
-                        int backoffDelay = (int)(Math.Pow(2, attempt -1) * 10000); // Exponential backoff: 10s, 20s, 40s
-                        Log.Warning("Network or API issue. Waiting {Seconds} seconds before retrying...", backoffDelay / 1000);
-                        await Task.Delay(backoffDelay, cts.Token);
+                            if (downloadSuccess)
+                            {
+                                Log.Information("Successfully downloaded video: {Title}", video.Title);
+
+                                Log.Information("Waiting {Seconds} seconds before the next download...", settings.DownloadCooldownMs / 1000);
+                                await Task.Delay(settings.DownloadCooldownMs, cts.Token);
+
+                                break;
+                            }
+
+                            throw new Exception("Download returned false (yt-dlp failed)");
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error("Attempt {Attempt} failed for video {Title}. Error: {Message}", attempt, video.Title, ex.Message);
+
+                            if (attempt == maxRetries)
+                            {
+                                Log.Fatal("All {MaxRetries} attempts failed. Skipping video: {Title}", maxRetries, video.Title);
+                                await dbService.UpdateLink(video.YoutubeId, null, null, LinkStatus.DownloadFailed);
+                            }
+                            else
+                            {
+                                int backoffDelay = (int)(Math.Pow(2, attempt - 1) * settings.DownloadRetryBaseDelayMs);
+                                Log.Warning("Network or API issue. Waiting {Seconds} seconds before retrying...", backoffDelay / 1000);
+                                await Task.Delay(backoffDelay, cts.Token);
+                            }
+                        }
                     }
                 }
             }
-        }
-    }
-    else
-    {
-        Log.Information("No videos are missing. Everything is archived.");
-    }
+            else
+            {
+                Log.Information("No videos are missing. Everything is archived.");
+            }
+        });
 
     Log.Information("=== Process Complete ===");
     Log.Information("Result: {Report}", report.ToString());
