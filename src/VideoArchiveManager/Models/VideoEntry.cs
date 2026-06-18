@@ -24,9 +24,6 @@ namespace VideoArchiveManager.Models
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-        // Domain methods – status transitions should go through these so business rules stay
-        // in the model and are not scattered across callers.
-
         public void MarkAsDownloading()
         {
             Status = LinkStatus.Downloading;

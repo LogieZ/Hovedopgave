@@ -21,13 +21,13 @@ public abstract class FileSystemBase : IFileSystem
 
     public virtual long GetFileSize(string path) => new FileInfo(path).Length;
 
-    public virtual long GetDurationSeconds(string path) => ReadDurationSeconds(path);
+    public virtual Task<long> GetDurationSecondsAsync(string path) => ReadDurationSecondsAsync(path);
 
     /// <summary>
     /// Reads the duration of a video file in seconds using ffprobe.
     /// This implementation is platform-agnostic and used by both Windows and Linux implementations.
     /// </summary>
-    protected static long ReadDurationSeconds(string path)
+    protected static async Task<long> ReadDurationSecondsAsync(string path)
     {
         try
         {
@@ -49,8 +49,9 @@ public abstract class FileSystemBase : IFileSystem
                 return 0;
             }
 
-            var output = process.StandardOutput.ReadToEnd().Trim();
-            process.WaitForExit();
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            var output = (await outputTask).Trim();
 
             if (process.ExitCode != 0 || !double.TryParse(output, NumberStyles.Float, CultureInfo.InvariantCulture, out var durationSeconds))
             {

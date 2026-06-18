@@ -89,7 +89,8 @@ public sealed class YoutubeService : IYoutubeService
             }
             catch (Exception ex)
             {
-                Log.Error("Error parsing video info: {Message}", ex.Message);
+                // Keep import resilient: skip bad rows without surfacing as CLI errors.
+                Log.Debug("Skipping video row during import due to DB/parse issue: {Message}", ex.Message);
             }
         }
 
@@ -271,7 +272,7 @@ public sealed class YoutubeService : IYoutubeService
             }
 
             string output = await process.StandardOutput.ReadToEndAsync();
-            string errorOutput = await process.StandardError.ReadToEndAsync();
+            string errorOutput = await process.StandardError.ReadToEndAsync() ?? string.Empty;
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(20));
@@ -281,7 +282,7 @@ public sealed class YoutubeService : IYoutubeService
             {
                 if (process.ExitCode != 0)
                 {
-                    var lowerError = (errorOutput ?? string.Empty).ToLowerInvariant();
+                    var lowerError = errorOutput.ToLowerInvariant();
                     if (lowerError.Contains("private") || lowerError.Contains("login"))
                     {
                         return (null, "private_or_auth", errorOutput);
@@ -379,9 +380,10 @@ public sealed class YoutubeService : IYoutubeService
                 // -o: Specifies destination folder and filename format
                 Arguments = $"--cookies cookies.txt -f \"bestvideo+bestaudio/best\" --merge-output-format mp4 " +
                             $"--restrict-filenames " +
+                            $"--print after_move:filepath " +
                             $"-o \"{destinationFolder}/%(title)s.%(ext)s\" " +
                             $"--no-playlist \"https://www.youtube.com/watch?v={entry.YoutubeId}\"",
-                RedirectStandardOutput = false,
+                RedirectStandardOutput = true,
                 RedirectStandardError = false,
                 UseShellExecute = false,
                 CreateNoWindow = false
@@ -391,6 +393,8 @@ public sealed class YoutubeService : IYoutubeService
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeSpan.FromMinutes(30)); // Set a timeout for the download to prevent it from hanging indefinitely
+
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync();
 
             try
             {
@@ -406,7 +410,34 @@ public sealed class YoutubeService : IYoutubeService
             if (process.ExitCode == 0)
             {
                 Log.Information("Download completed for: {Title}", entry.Title);
-                entry.MarkAsLinked();
+
+                string ytdlpOutput = await outputTask;
+                var downloadedFilePath = ytdlpOutput
+                    .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .LastOrDefault(line => File.Exists(line));
+                    
+                if (!string.IsNullOrWhiteSpace(downloadedFilePath))
+                {
+                    long? fileSizeBytes = null;
+                    try
+                    {
+                        fileSizeBytes = new FileInfo(downloadedFilePath).Length;
+                    }
+                    catch
+                    {
+                        // Best-effort metadata; linking should still succeed without size.
+                    }
+
+                    entry.MarkAsLinked(downloadedFilePath, fileSizeBytes);
+                }
+                else
+                {
+                    Log.Warning(
+                        "Download succeeded for {YoutubeId}, but output file path could not be resolved. Keeping status Unlinked for relinking.",
+                        entry.YoutubeId);
+                    entry.ResetFromStuckDownload();
+                }
+
                 await _db.UpdateVideoEntryAsync(entry);
                 return true;
             }

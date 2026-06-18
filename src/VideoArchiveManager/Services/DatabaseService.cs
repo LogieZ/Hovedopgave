@@ -22,15 +22,6 @@ public sealed class DatabaseService : IDatabaseService
 
     private ArchiveDbContext CreateContext() => new ArchiveDbContext(_settings.ConnectionString);
 
-    // Find a video entry by its YouTube ID. Returns null if not found.
-    public VideoEntry? FindByYoutubeId(string youtubeId)
-    {
-        using var context = CreateContext();
-        return context.VideoEntries
-            .AsNoTracking()
-            .FirstOrDefault(e => e.YoutubeId == youtubeId);
-    }
-
     public VideoEntry? FindBestMatchByTitle(string fileName, long fileDurationSeconds = 0, string filePath = "")
     {
         using var context = CreateContext();

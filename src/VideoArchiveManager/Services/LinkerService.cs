@@ -58,18 +58,8 @@ public sealed class LinkerService
         foreach (var file in batch)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            VideoEntry? entry = null;
-
-            if (!string.IsNullOrEmpty(file.YoutubeId))
-            {
-                entry = _db.FindByYoutubeId(file.YoutubeId);
-            }
-
-            if (entry == null)
-            {
-                // First pass: cheap title-only matching (no ffprobe duration yet).
-                entry = _db.FindBestMatchByTitle(file.FileName, 0, file.FilePath);
-            }
+            // First pass: cheap title-only matching (no ffprobe duration yet).
+            var entry = _db.FindBestMatchByTitle(file.FileName, 0, file.FilePath);
 
             if (entry != null)
             {
@@ -83,7 +73,7 @@ public sealed class LinkerService
                 long durationSeconds = file.Duration;
                 if (durationSeconds <= 0)
                 {
-                    durationSeconds = _fileSystem.GetDurationSeconds(file.FilePath);
+                    durationSeconds = await _fileSystem.GetDurationSecondsAsync(file.FilePath);
                 }
 
                 if (durationSeconds > 0)

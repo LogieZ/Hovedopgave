@@ -135,7 +135,15 @@ try
             foreach (var entry in linkedEntries)
             {
                 if (cts.Token.IsCancellationRequested) break;
-                if (string.IsNullOrWhiteSpace(entry.LinkedFilePath)) continue;
+
+                // Defensive repair: a Linked entry without a file path is not verifiable on disk.
+                // Move it back to Missing so it can be relinked by future scan runs.
+                if (string.IsNullOrWhiteSpace(entry.LinkedFilePath))
+                {
+                    await dbService.UpdateLink(entry.YoutubeId, null, null, LinkStatus.Missing);
+                    missingLinkCount++;
+                    continue;
+                }
 
                 if (!fileSystem.FileExists(entry.LinkedFilePath))
                 {

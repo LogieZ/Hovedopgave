@@ -107,7 +107,7 @@ public class LinkerServiceTests
             Arg.Any<long>(), 
             Arg.Any<LinkStatus>());
 
-        _mockFileSystem.DidNotReceive().GetDurationSeconds(Arg.Any<string>());
+        await _mockFileSystem.DidNotReceive().GetDurationSecondsAsync(Arg.Any<string>());
     }
 
     [Fact]
@@ -186,7 +186,6 @@ public class LinkerServiceTests
         report.NewlyLinked.Should().Be(0);
         report.UnmatchedFileNames.Should().BeEmpty();
 
-        _mockDb.DidNotReceive().FindByYoutubeId(Arg.Any<string>());
         _mockDb.DidNotReceive().FindBestMatchByTitle(Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string>());
         await _mockDb.DidNotReceive().UpdateLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<LinkStatus>());
     }

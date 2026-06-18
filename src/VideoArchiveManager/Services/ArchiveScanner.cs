@@ -26,14 +26,6 @@ public sealed class ArchiveScanner
             yield break;
         }
 
-        var enumerationOptions = new EnumerationOptions
-        {
-            IgnoreInaccessible = true, // Skip files/directories we can't access
-            RecurseSubdirectories = true, // Search all subdirectories
-            AttributesToSkip = FileAttributes.System, // Skip system files
-            BufferSize = 65536, // 64 KB
-        };
-
         IEnumerable<string> files;
         try 
         {
@@ -56,7 +48,7 @@ public sealed class ArchiveScanner
                 continue;
             }
 
-            // Attempt to create a FileRecord for the video file, including extracting YouTube ID if present.
+            // Attempt to create a FileRecord for the video file.
             FileRecord record;
             try
             {
@@ -67,8 +59,7 @@ public sealed class ArchiveScanner
                     FileName = Path.GetFileName(filePath),
                     // Defer ffprobe duration until a plausible DB candidate exists.
                     Duration = 0,
-                    SizeBytes = fileSize,
-                    YoutubeId = null // Set to null by default, since local files won't have this info.
+                    SizeBytes = fileSize
                 };
             }
             catch (Exception ex)

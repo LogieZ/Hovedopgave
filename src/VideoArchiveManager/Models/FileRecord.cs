@@ -6,6 +6,5 @@ namespace VideoArchiveManager.Models
         public string FileName { get; set; } = string.Empty;
         public long Duration { get; set; }
         public long SizeBytes { get; set; }
-        public string? YoutubeId { get; set; }
     }
 }

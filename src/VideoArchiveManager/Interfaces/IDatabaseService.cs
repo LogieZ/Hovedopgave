@@ -4,7 +4,6 @@ namespace VideoArchiveManager.Interfaces;
 
 public interface IDatabaseService
 {
-    VideoEntry? FindByYoutubeId(string youtubeId);
     VideoEntry? FindBestMatchByTitle(string title, long fileDurationSeconds = 0, string filePath = "");
     void AddVideoEntry(VideoEntry entry);
     Task UpdateLink(string youtubeId, string? filePath, long? fileSizeBytes, LinkStatus status);

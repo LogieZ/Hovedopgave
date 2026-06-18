@@ -17,6 +17,7 @@ public class SyncMissingFilesSteps
     private readonly AppSettings _settings;
     private VideoEntry? _fakeDbEntry;
     private string _fakeFilePath = @"F:\DKCTV Filer\Manglende_Video.mp4";
+    private readonly List<VideoEntry> _mixedEntries = new();
 
     public SyncMissingFilesSteps()
     {
@@ -49,6 +50,46 @@ public class SyncMissingFilesSteps
         _mockFileSystem.FileExists(_fakeFilePath).Returns(false);
     }
 
+    [Given(@"the file exists on disk")]
+    public void GivenTheFileExistsOnDisk()
+    {
+        _mockFileSystem.FileExists(_fakeFilePath).Returns(true);
+    }
+
+    [Given(@"mixed linked records exist in the database")]
+    public void GivenMixedLinkedRecordsExistInTheDatabase()
+    {
+        _mixedEntries.Clear();
+
+        var missingPath = @"F:\DKCTV Filer\Manglende_Video_1.mp4";
+        var existingPath = @"F:\DKCTV Filer\Eksisterende_Video_1.mp4";
+
+        _mixedEntries.Add(new VideoEntry
+        {
+            YoutubeId = "missing001",
+            Title = "Manglende video",
+            Status = LinkStatus.Linked,
+            LinkedFilePath = missingPath
+        });
+
+        _mixedEntries.Add(new VideoEntry
+        {
+            YoutubeId = "existing001",
+            Title = "Eksisterende video",
+            Status = LinkStatus.Linked,
+            LinkedFilePath = existingPath
+        });
+
+        _mockDb.StreamLinkedButMissingOnDisk().Returns(_mixedEntries);
+    }
+
+    [Given(@"one linked file is missing on disk and one exists")]
+    public void GivenOneLinkedFileIsMissingOnDiskAndOneExists()
+    {
+        _mockFileSystem.FileExists(@"F:\DKCTV Filer\Manglende_Video_1.mp4").Returns(false);
+        _mockFileSystem.FileExists(@"F:\DKCTV Filer\Eksisterende_Video_1.mp4").Returns(true);
+    }
+
     [When(@"the synchronization process starts")]
     public async Task WhenTheSynchronizationProcessStarts()
     {
@@ -56,7 +97,12 @@ public class SyncMissingFilesSteps
         var missingVideos = _mockDb.StreamLinkedButMissingOnDisk();
         foreach (var video in missingVideos)
         {
-            if (!_mockFileSystem.FileExists(video.LinkedFilePath!))
+            if (string.IsNullOrWhiteSpace(video.LinkedFilePath))
+            {
+                continue;
+            }
+
+            if (!_mockFileSystem.FileExists(video.LinkedFilePath))
             {
                 video.MarkAsMissing();
                 await _mockDb.UpdateLink(video.YoutubeId, null, null, LinkStatus.Missing);
@@ -71,5 +117,25 @@ public class SyncMissingFilesSteps
 
         _fakeDbEntry.Status.Should().Be(LinkStatus.Missing);
         _fakeDbEntry.LinkedFilePath.Should().BeNull();
+    }
+
+    [Then(@"no database entry should be marked as ""Missing""")]
+    public async Task ThenNoDatabaseEntryShouldBeMarkedAsMissing()
+    {
+        await _mockDb.DidNotReceive().UpdateLink(
+            Arg.Any<string>(),
+            Arg.Any<string?>(),
+            Arg.Any<long?>(),
+            LinkStatus.Missing);
+    }
+
+    [Then(@"exactly one database entry should be marked as ""Missing""")]
+    public async Task ThenExactlyOneDatabaseEntryShouldBeMarkedAsMissing()
+    {
+        await _mockDb.Received(1).UpdateLink(
+            Arg.Any<string>(),
+            Arg.Any<string?>(),
+            Arg.Any<long?>(),
+            LinkStatus.Missing);
     }
 }
